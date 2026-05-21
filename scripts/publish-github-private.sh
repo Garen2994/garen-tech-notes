@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 REPO_NAME="${REPO_NAME:-garen-tech-notes}"
-DESCRIPTION="${DESCRIPTION:-Garen's personal technical knowledge base}"
+REPO_DESCRIPTION="${REPO_DESCRIPTION:-Garen personal technical knowledge base}"
 VISIBILITY_PRIVATE=true
 
 if [ -z "${GITHUB_TOKEN:-}" ]; then
@@ -12,6 +12,7 @@ if [ -z "${GITHUB_TOKEN:-}" ]; then
   echo "  ./scripts/publish-github-private.sh"
   exit 1
 fi
+GITHUB_TOKEN_VALUE="${GITHUB_TOKEN:-}"
 
 command -v curl >/dev/null 2>&1 || { echo "ERROR: curl is required"; exit 1; }
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required"; exit 1; }
@@ -30,15 +31,29 @@ if ! git diff --cached --quiet; then
   git commit -m "Update tech notes"
 fi
 
-USER_JSON="$(curl -fsS -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/user)"
+USER_JSON="$(curl -fsS -H "Authorization: token ${GITHUB_TOKEN_VALUE}" https://api.github.com/user)"
 GH_USER="$(python3 -c 'import sys,json; print(json.load(sys.stdin)["login"])' <<< "$USER_JSON")"
 
-HTTP_CODE="$(curl -sS -o /tmp/garen-tech-notes-create-repo.json -w '%{http_code}' \
+CREATE_PAYLOAD="$(REPO_NAME="$REPO_NAME" REPO_DESCRIPTION="$REPO_DESCRIPTION" VISIBILITY_PRIVATE="$VISIBILITY_PRIVATE" python3 - <<'PY'
+import json
+import os
+payload = {
+    "name": os.environ["REPO_NAME"],
+    "description": os.environ["REPO_DESCRIPTION"],
+    "private": os.environ.get("VISIBILITY_PRIVATE", "true").lower() == "true",
+    "auto_init": False,
+}
+print(json.dumps(payload, ensure_ascii=False))
+PY
+)"
+
+CREATE_RESPONSE_FILE="${TMPDIR:-/tmp}/garen-tech-notes-create-repo.json"
+HTTP_CODE="$(curl -sS -o "$CREATE_RESPONSE_FILE" -w '%{http_code}' \
   -X POST \
-  -H "Authorization: token ${GITHUB_TOKEN}" \
+  -H "Authorization: token ${GITHUB_TOKEN_VALUE}" \
   -H "Accept: application/vnd.github+json" \
   https://api.github.com/user/repos \
-  -d "{\"name\":\"${REPO_NAME}\",\"description\":\"${DESCRIPTION}\",\"private\":${VISIBILITY_PRIVATE},\"auto_init\":false}")"
+  -d "$CREATE_PAYLOAD")"
 
 if [ "$HTTP_CODE" = "201" ]; then
   echo "Created private repo: ${GH_USER}/${REPO_NAME}"
@@ -46,7 +61,7 @@ elif [ "$HTTP_CODE" = "422" ]; then
   echo "Repo may already exist: ${GH_USER}/${REPO_NAME}"
 else
   echo "ERROR: GitHub repo creation failed with HTTP ${HTTP_CODE}"
-  cat /tmp/garen-tech-notes-create-repo.json
+  cat "$CREATE_RESPONSE_FILE"
   exit 1
 fi
 
@@ -68,8 +83,8 @@ case "$1" in
   *) echo "" ;;
 esac
 EOS
-trap 'rm -f "$ASKPASS_FILE" /tmp/garen-tech-notes-create-repo.json' EXIT
+trap 'rm -f "$ASKPASS_FILE" "$CREATE_RESPONSE_FILE"' EXIT
 
-GIT_ASKPASS="$ASKPASS_FILE" GIT_TERMINAL_PROMPT=0 git push -u origin main
+GIT_ASKPASS="$ASKPASS_FILE" GITHUB_TOKEN="$GITHUB_TOKEN_VALUE" GIT_TERMINAL_PROMPT=0 git push -u origin main
 
 echo "Published: https://github.com/${GH_USER}/${REPO_NAME}"
