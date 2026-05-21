@@ -1,2 +1,2 @@
-# garen-tech-notes-
+# garen-tech-notes
 my tech wiki repo
