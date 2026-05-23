@@ -15,6 +15,8 @@ Garen 的个人技术知识库，用于沉淀源码阅读、Runtime 机制分析
 ## 当前内容
 
 - `runtime/context-global-role.md`：Runtime Context 全局作用说明，以及 Context 与 Stream 的关系分析
+- `code-reading/runtime-context-mechanism-guide.md`：Runtime Context 防 UAF 重构后的机制导读
+- `code-reading/runtime-context-uaf-refactor-review-8fbd393a.md`：`8fbd393a` Context 防 UAF 重构审查，包含保护机制、漏点和修复建议
 
 ## GitHub 私有归档
 
